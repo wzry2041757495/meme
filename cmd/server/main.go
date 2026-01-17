@@ -16,7 +16,8 @@ func main() {
 
 	// 从环境变量读取配置
 	config := &sources.Config{
-		DouyinCookie: os.Getenv("DOUYIN_COOKIE"),
+		DouyinCookie:  os.Getenv("DOUYIN_COOKIE"),
+		ImageProxyURL: os.Getenv("IMAGE_PROXY_URL"),
 	}
 
 	// 注册所有源

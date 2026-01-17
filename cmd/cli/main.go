@@ -49,7 +49,8 @@ func main() {
 	}
 	registry := core.NewRegistry()
 	config := &sources.Config{
-		DouyinCookie: os.Getenv("DOUYIN_COOKIE"),
+		DouyinCookie:  os.Getenv("DOUYIN_COOKIE"),
+		ImageProxyURL: os.Getenv("IMAGE_PROXY_URL"),
 	}
 	if *verbose {
 		fmt.Fprintln(os.Stderr, "📦 正在注册数据源...")

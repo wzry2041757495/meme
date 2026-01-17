@@ -152,6 +152,126 @@ func (s *SougouSource) Search(ctx context.Context, keyword string, opts core.Sea
 	return memes, nil
 }
 
+// ============ 表情包 (Doutub) ============
+
+type DoutubSource struct {
+	BaseSource
+}
+
+func NewDoutub() *DoutubSource {
+	return &DoutubSource{
+		BaseSource: BaseSource{
+			id:          "doutub",
+			name:        "表情包API",
+			description: "从 api.doutub.com 搜索表情包",
+			requireAuth: false,
+			client:      newHTTPClient(),
+		},
+	}
+}
+
+// doutubResponse API 响应结构
+// URL: https://api.doutub.com/api/bq/getBqlistByKeyword
+type doutubResponse struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data struct {
+		Count int `json:"count"`
+		Rows  []struct {
+			ID      int    `json:"id"`
+			ImgName string `json:"imgName"` // 图片名称
+			Path    string `json:"path"`    // 图片链接
+		} `json:"rows"`
+	} `json:"data"`
+}
+
+func (s *DoutubSource) Search(ctx context.Context, keyword string, opts core.SearchOptions) ([]core.Meme, error) {
+	page := opts.Page
+	if page < 1 {
+		page = 1
+	}
+	// 默认每页 20 (API 支持 pageSize)
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 50 {
+		limit = 50
+	}
+
+	params := url.Values{
+		"keyword":  {keyword},
+		"curPage":  {fmt.Sprintf("%d", page)},
+		"pageSize": {fmt.Sprintf("%d", limit)},
+	}
+
+	apiURL := "https://api.doutub.com/api/bq/getBqlistByKeyword?" + params.Encode()
+	fmt.Fprintf(os.Stderr, "🌐 [Request] GET %s\n", apiURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request failed: %w", err)
+	}
+
+	// 模拟浏览器 Headers
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Origin", "https://www.doutub.com")
+	req.Header.Set("Referer", "https://www.doutub.com/")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
+	req.Header.Set("Connection", "keep-alive")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var data doutubResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("decode JSON failed: %w", err)
+	}
+
+	if data.Code != 1 {
+		return nil, fmt.Errorf("api returned error code: %d, msg: %s", data.Code, data.Msg)
+	}
+
+	var memes []core.Meme
+	for _, item := range data.Data.Rows {
+		if item.Path == "" {
+			continue
+		}
+
+		imgURL := core.NormalizeURL(item.Path)
+		if !core.IsValidImageURL(imgURL) {
+			continue
+		}
+
+		// 使用 applyImageProxy 处理防盗链，Referer 设为官网
+		finalURL := applyImageProxy(imgURL, "https://www.doutub.com/")
+
+		title := item.ImgName
+		if title == "" {
+			title = "Doutub表情"
+		}
+
+		memes = append(memes, core.Meme{
+			Title:    title,
+			URL:      finalURL,
+			Platform: s.id,
+			Format:   core.DetectImageFormat(imgURL),
+		})
+	}
+
+	return memes, nil
+}
+
 // ============ 抖音 (Douyin) ============
 
 type DouyinSource struct {

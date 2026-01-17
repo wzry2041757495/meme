@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -29,7 +30,7 @@ func NewSearchMemeTool(registry *core.Registry) mcp.Tool {
 			mcp.Description("搜索关键词，如：猫、狗、开心、难过等"),
 		),
 		mcp.WithArray("sources",
-			mcp.Description("可选，指定搜索的源ID列表。不指定则搜索所有源。可用源：qudoutu, doutula, pdan, sougou, douyin"),
+			mcp.Description("可选，指定搜索的源ID列表。不指定则搜索所有源。可用源：qudoutu, doutula, pdan, sougou, douyin, doutub"),
 		),
 		mcp.WithNumber("page",
 			mcp.Description("页码，默认为 1"),
@@ -85,14 +86,17 @@ func HandleSearchMeme(registry *core.Registry) func(ctx context.Context, request
 
 		fmt.Fprintf(os.Stderr, "[SearchMeme] Search completed. Found %d items. Duration: %dms\n", len(result.Memes), result.DurationMs)
 
-		// 构造返回结果
-		resultJSON, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
+		// 构造返回结果，禁用 HTML 转义以正确显示 & 符号
+		var buf bytes.Buffer
+		encoder := json.NewEncoder(&buf)
+		encoder.SetEscapeHTML(false)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(result); err != nil {
 			fmt.Fprintf(os.Stderr, "[SearchMeme] Failed to marshal result: %v\n", err)
 			return mcp.NewToolResultError(fmt.Sprintf("结果序列化失败: %v", err)), nil
 		}
 
-		return mcp.NewToolResultText(string(resultJSON)), nil
+		return mcp.NewToolResultText(buf.String()), nil
 	}
 }
 

@@ -116,6 +116,24 @@ func fetchHTML(ctx context.Context, client *http.Client, targetURL string, heade
 	return doc, nil
 }
 
+// applyImageProxy 如果配置了 IMAGE_PROXY_URL 环境变量，则对图片 URL 进行代理处理
+// 支持占位符: {URL} 或 {SOURCE_URL} 表示原图地址, {REFERER} 表示 Referer
+func applyImageProxy(imgURL, referer string) string {
+	proxyTmpl := os.Getenv("IMAGE_PROXY_URL")
+	if proxyTmpl == "" {
+		return imgURL
+	}
+
+	encodedURL := url.QueryEscape(imgURL)
+	encodedReferer := url.QueryEscape(referer)
+
+	result := strings.ReplaceAll(proxyTmpl, "{SOURCE_URL}", encodedURL)
+	result = strings.ReplaceAll(result, "{URL}", encodedURL)
+	result = strings.ReplaceAll(result, "{REFERER}", encodedReferer)
+
+	return result
+}
+
 // ============ 趣斗图 (Qudoutu) ============
 
 type QudoutuSource struct {
@@ -178,9 +196,12 @@ func (s *QudoutuSource) Search(ctx context.Context, keyword string, opts core.Se
 			title = "趣斗图"
 		}
 
+		// 如果需要，应用图片代理
+		finalURL := applyImageProxy(imgURL, "https://www.qudoutu.cn/")
+
 		memes = append(memes, core.Meme{
 			Title:    title,
-			URL:      imgURL,
+			URL:      finalURL,
 			Platform: s.id,
 			Format:   core.DetectImageFormat(imgURL),
 		})
